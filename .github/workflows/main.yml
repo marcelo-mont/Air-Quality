@@ -1,0 +1,23 @@
+trigger:
+- main
+
+variables:
+  projectName: 'air-quality'
+  webAppName: 'air-quality-app'
+
+pool:
+  vmImage: 'windows-2019'  # Tente com windows-2019
+
+steps:
+- task: Maven@3
+  displayName: 'Build com Maven'
+  inputs:
+    mavenPomFile: 'pom.xml'
+    goals: 'clean package'
+    
+- task: AzureWebAppContainer@1
+  displayName: 'Deploy no Web App'
+  inputs:
+    azureSubscription: 'azure-subscription-air-quality'
+    appName: '$(webAppName)'
+    containers: 'yourregistry.azurecr.io/$(projectName):latest'
