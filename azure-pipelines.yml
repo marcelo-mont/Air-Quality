@@ -1,0 +1,125 @@
+# Starter pipeline
+# Start with a minimal pipeline that you can customize to build and deploy your code.
+# Add steps that build, run tests, deploy, and more:
+# https://aka.ms/yaml
+
+trigger:
+- main
+
+pool:
+  vmImage: ubuntu-latest
+
+steps:
+- script: echo Hello, world!
+  displayName: 'Run a one-line script'
+
+- script: |
+    echo Add other tasks to build, test, and deploy your project.
+    echo See https://aka.ms/yaml
+  displayName: 'Run a multi-line script'
+
+variables:
+  # Variáveis do projeto
+  projectName: 'air-quality'
+  # Variáveis para Docker
+  dockerRegistryServiceConnection: 'YourDockerRegistryConnection'
+  containerRegistry: 'yourRegistry.azurecr.io'
+  dockerfilePath: 'Dockerfile'
+  tag: '$(Build.BuildId)'
+  # Variáveis para Kubernetes
+  kubernetesServiceConnection: 'YourK8sConnection'
+  k8sNamespaceStaging: 'staging'
+  k8sNamespaceProduction: 'production'
+
+stages:
+- stage: Build
+  displayName: 'Build and Test'
+  jobs:
+  - job: BuildAndTest
+    displayName: 'Build and Test'
+    pool:
+      vmImage: 'ubuntu-latest'
+    steps:
+    - task: Maven@3
+      displayName: 'Build and Test Maven Project'
+      inputs:
+        mavenPomFile: 'air-quality/pom.xml'
+        goals: 'clean package'
+        publishJUnitResults: true
+        testResultsFiles: '**/surefire-reports/TEST-*.xml'
+        javaHomeOption: 'JDKVersion'
+        jdkVersionOption: '1.21'
+        mavenVersionOption: 'Default'
+        
+    - task: Docker@2
+      displayName: 'Build and Push Docker Image'
+      inputs:
+        command: buildAndPush
+        repository: '$(projectName)'
+        dockerfile: '$(dockerfilePath)'
+        containerRegistry: '$(dockerRegistryServiceConnection)'
+        tags: |
+          $(tag)
+          latest
+          
+    - task: PublishPipelineArtifact@1
+      displayName: 'Publish Kubernetes Manifests'
+      inputs:
+        targetPath: '$(System.DefaultWorkingDirectory)/kubernetes'
+        artifact: 'manifests'
+        
+- stage: DeployToStaging
+  displayName: 'Deploy to Staging'
+  dependsOn: Build
+  condition: succeeded()
+  jobs:
+  - deployment: DeployToStaging
+    displayName: 'Deploy to Staging'
+    environment: 'Staging'
+    pool:
+      vmImage: 'ubuntu-latest'
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - task: DownloadPipelineArtifact@2
+            inputs:
+              artifactName: 'manifests'
+              targetPath: '$(System.ArtifactsDirectory)/manifests'
+              
+          - task: KubernetesManifest@0
+            displayName: 'Deploy to Kubernetes'
+            inputs:
+              action: 'deploy'
+              kubernetesServiceConnection: '$(kubernetesServiceConnection)'
+              namespace: '$(k8sNamespaceStaging)'
+              manifests: '$(System.ArtifactsDirectory)/manifests/staging/*.yml'
+              containers: '$(containerRegistry)/$(projectName):$(tag)'
+              
+- stage: DeployToProduction
+  displayName: 'Deploy to Production'
+  dependsOn: DeployToStaging
+  condition: succeeded()
+  jobs:
+  - deployment: DeployToProduction
+    displayName: 'Deploy to Production'
+    environment: 'Production'
+    pool:
+      vmImage: 'ubuntu-latest'
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - task: DownloadPipelineArtifact@2
+            inputs:
+              artifactName: 'manifests'
+              targetPath: '$(System.ArtifactsDirectory)/manifests'
+              
+          - task: KubernetesManifest@0
+            displayName: 'Deploy to Kubernetes'
+            inputs:
+              action: 'deploy'
+              kubernetesServiceConnection: '$(kubernetesServiceConnection)'
+              namespace: '$(k8sNamespaceProduction)'
+              manifests: '$(System.ArtifactsDirectory)/manifests/production/*.yml'
+              containers: '$(containerRegistry)/$(projectName):$(tag)'
