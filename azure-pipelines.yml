@@ -6,6 +6,31 @@
 trigger:
 - main
 
+pool:
+  vmImage: 'ubuntu-latest'  # Máquina virtual para executar o pipeline
+
+  steps:
+# Configurar o JDK
+- task: UseJavaVersion@1
+  inputs:
+    version: '11'  # Versão do Java (ajuste conforme necessário)
+    architecture: 'x64'
+  displayName: 'Configurar Java 11'
+
+# Fazer checkout do código
+- task: Checkout@1
+  displayName: 'Fazer checkout do código'
+
+# Instalar dependências e construir o projeto
+- script: |
+    mvn clean install
+  displayName: 'Construir o projeto com Maven'
+
+# Executar testes
+- script: |
+    mvn test
+  displayName: 'Executar testes'
+
 variables:
   # Variáveis do projeto
   projectName: 'air-quality'
