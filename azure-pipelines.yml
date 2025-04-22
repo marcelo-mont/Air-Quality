@@ -19,6 +19,14 @@ variables:
   k8sNamespaceStaging: 'staging'
   k8sNamespaceProduction: 'production'
 
+# Publicar artefatos (JAR ou WAR)
+- task: PublishBuildArtifacts@1
+  inputs:
+    pathToPublish: 'target/*.jar'  # Caminho para o artefato gerado
+    artifactName: 'drop'
+    publishLocation: 'Container'
+  displayName: 'Publicar artefatos'
+
 stages:
 - stage: Build
   displayName: 'Build and Test'
